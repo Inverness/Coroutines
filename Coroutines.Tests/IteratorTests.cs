@@ -1,8 +1,9 @@
 ﻿using System.Collections.Generic;
+using Coroutines.Serialization;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace CoroutineSerialization.Tests
+namespace Coroutines.Tests
 {
     public class IteratorTests
     {

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 
-namespace CoroutineSerialization
+namespace Coroutines.Serialization
 {
     /// <summary>
     /// Represents the serializable state of an iterator.

@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoroutineSerialization", "CoroutineSerialization\CoroutineSerialization.csproj", "{360868A6-F6B9-453A-A928-4279EE26BAA3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coroutines", "Coroutines\Coroutines.csproj", "{360868A6-F6B9-453A-A928-4279EE26BAA3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoroutineSerialization.Tests", "CoroutineSerialization.Tests\CoroutineSerialization.Tests.csproj", "{01DFCAFB-425E-42D5-9A85-FD5F34E6E1B9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coroutines.Tests", "Coroutines.Tests\Coroutines.Tests.csproj", "{01DFCAFB-425E-42D5-9A85-FD5F34E6E1B9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

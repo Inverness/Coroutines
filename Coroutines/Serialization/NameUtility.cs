@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 
-namespace CoroutineSerialization
+namespace Coroutines.Serialization
 {
     internal class NameUtility
     {

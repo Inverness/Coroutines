@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 
-namespace CoroutineSerialization
+namespace Coroutines.Serialization
 {
     /// <summary>
     /// Converts a compiler-generated iterator state machine to and from an IteratorState object.
