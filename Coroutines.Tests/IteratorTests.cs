@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Coroutines.Serialization;
 using Xunit;
 using Xunit.Abstractions;
@@ -109,6 +110,30 @@ namespace Coroutines.Tests
             yield return r;
             r *= 4;
             yield return r;
+        }
+
+        internal static IEnumerable<int> StaticYieldWithVarAndArgAndCatch(int start)
+        {
+            int r = 0;
+            try
+            {
+                r = start;
+                yield return r;
+                r = Mult(r, 3);
+                yield return r;
+                r = Mult(r, 4);
+                yield return r;
+            }
+            finally
+            {
+                r = start * 99;
+            }
+
+        }
+
+        private static int Mult(int a, int f)
+        {
+            return a * f;
         }
     }
 }

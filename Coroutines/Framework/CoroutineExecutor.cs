@@ -14,7 +14,7 @@ namespace Coroutines.Framework
     /// execution to that coroutine, or yield a TimeSpan to delay execution for the specified amount of time.
     /// Any other yields will be ignored.
     /// </remarks>
-    public class CoroutineExecutor
+    public class CoroutineExecutor : IDisposable
     {
         [ThreadStatic]
         private static Stack<CoroutineExecutor> t_currentExecutors;
@@ -164,52 +164,83 @@ namespace Coroutines.Framework
         //    } while (living != 0);
         //}
 
+        public virtual void Dispose()
+        {
+            foreach (Stack<IEnumerator> stack in _stacks)
+            {
+                while (stack.Count != 0)
+                    (stack.Pop() as IDisposable)?.Dispose();
+            }
+        }
+
         private bool TickStack(Stack<IEnumerator> stack, TimeSpan elapsed)
         {
             Stack<CoroutineExecutor> currentExecutors = t_currentExecutors;
             if (currentExecutors == null)
                 t_currentExecutors = currentExecutors = new Stack<CoroutineExecutor>();
 
-            bool result;
-            IEnumerator top = stack.Peek();
-
             currentExecutors.Push(this);
             _executingStack = stack;
             _elapsed = elapsed;
             try
             {
-                result = top.MoveNext();
+                // Loop continues until null or unrecognized yield.
+                while (true)
+                {
+                    IEnumerator top = stack.Peek();
+
+                    bool result;
+                    try
+                    {
+                        result = top.MoveNext();
+                    }
+                    catch
+                    {
+                        stack.Pop();
+                        (top as IDisposable)?.Dispose();
+                        throw;
+                    }
+
+                    Debug.Assert(stack.Count != 0 && stack.Peek() == top);
+
+                    if (result)
+                    {
+                        object current = top.Current;
+                        if (current != null)
+                        {
+                            TimeSpan? nextDelay;
+                            IEnumerable nextEnumerable;
+
+                            if ((nextEnumerable = current as IEnumerable) != null)
+                            {
+                                stack.Push(nextEnumerable.GetEnumerator());
+                            }
+                            else if ((nextDelay = current as TimeSpan?) != null && nextDelay.Value.Ticks > 0)
+                            {
+                                stack.Push(Delay(nextDelay.Value).GetEnumerator());
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        stack.Pop();
+                        (top as IDisposable)?.Dispose();
+                    }
+                }
             }
             finally
             {
                 _executingStack = null;
                 _elapsed = TimeSpan.Zero;
                 currentExecutors.Pop();
-            }
-
-            Debug.Assert(stack.Count != 0 && stack.Peek() == top);
-
-            if (result)
-            {
-                object current = top.Current;
-                if (current != null)
-                {
-                    TimeSpan? nextDelay;
-                    IEnumerable nextEnumerable;
-
-                    if ((nextEnumerable = current as IEnumerable) != null)
-                    {
-                        stack.Push(nextEnumerable.GetEnumerator());
-                    }
-                    else if ((nextDelay = current as TimeSpan?) != null && nextDelay.Value.Ticks > 0)
-                    {
-                        stack.Push(Delay(nextDelay.Value).GetEnumerator());
-                    }
-                }
-            }
-            else
-            {
-                stack.Pop();
             }
 
             return stack.Count != 0;
