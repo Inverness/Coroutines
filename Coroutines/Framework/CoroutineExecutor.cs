@@ -155,15 +155,22 @@ namespace Coroutines.Framework
         }
 
         /// <summary>
-        /// Ticks all coroutine threads until they have finished.
+        /// Ticks all coroutine threads until they have finished. A Stopwatch will be used to measure elapsed time.
         /// </summary>
-        /// <param name="timeFactor"></param>
-        public void Finish(double? timeFactor = null)
+        public void Finish()
         {
-            if (!timeFactor.HasValue)
-                timeFactor = 1.0;
-            if (timeFactor.Value <= 0)
-                throw new ArgumentOutOfRangeException(nameof(timeFactor), "timeFactor must be greater than zero");
+            Finish(1.0);
+        }
+
+        /// <summary>
+        /// Ticks all coroutine threads until they have finished. A Stopwatch will be used to measure elapsed time.
+        /// The measured elapsed time will be multiplied by the specified factor.
+        /// </summary>
+        /// <param name="factor">A factor to multiply the measured elapsed time by.</param>
+        public void Finish(double factor)
+        {
+            if (factor <= 0)
+                throw new ArgumentOutOfRangeException(nameof(factor), "timeFactor must be greater than zero");
 
             var sw = Stopwatch.StartNew();
 
@@ -171,11 +178,15 @@ namespace Coroutines.Framework
             int living;
             do
             {
-                TimeSpan newTime = TimeSpan.FromTicks((long) (sw.ElapsedTicks * timeFactor.Value));
+                TimeSpan elapsed;
+                checked
+                {
+                    TimeSpan newTime = TimeSpan.FromTicks((long) (sw.ElapsedTicks * factor));
 
-                TimeSpan elapsed = newTime - previousTime;
+                    elapsed = newTime - previousTime;
 
-                previousTime = newTime;
+                    previousTime = newTime;
+                }
                 
                 living = Tick(elapsed);
             } while (living != 0);
