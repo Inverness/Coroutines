@@ -6,11 +6,11 @@ using Xunit.Abstractions;
 
 namespace Coroutines.Tests
 {
-    public class IteratorTests
+    public class IteratorSerializationTests
     {
         private readonly ITestOutputHelper _out;
 
-        public IteratorTests(ITestOutputHelper output)
+        public IteratorSerializationTests(ITestOutputHelper output)
         {
             _out = output;
         }
@@ -20,7 +20,7 @@ namespace Coroutines.Tests
         {
             var serializer = new IteratorStateConverter();
 
-            IEnumerator<int> iterator = TestClass.StaticYieldOnly().GetEnumerator();
+            IEnumerator<int> iterator = SerializationCoroutines.StaticYieldOnly().GetEnumerator();
 
             iterator.MoveNext();
 
@@ -40,7 +40,7 @@ namespace Coroutines.Tests
         {
             var serializer = new IteratorStateConverter();
 
-            IEnumerator<int> iterator = TestClass.StaticYieldWithVar().GetEnumerator();
+            IEnumerator<int> iterator = SerializationCoroutines.StaticYieldWithVar().GetEnumerator();
 
             iterator.MoveNext();
 
@@ -64,7 +64,7 @@ namespace Coroutines.Tests
         {
             var serializer = new IteratorStateConverter();
 
-            IEnumerator<int> iterator = TestClass.StaticYieldWithVarAndArg(5).GetEnumerator();
+            IEnumerator<int> iterator = SerializationCoroutines.StaticYieldWithVarAndArg(5).GetEnumerator();
 
             iterator.MoveNext();
 
@@ -84,7 +84,7 @@ namespace Coroutines.Tests
         }
     }
 
-    public class TestClass
+    public class SerializationCoroutines
     {
         internal static IEnumerable<int> StaticYieldOnly()
         {

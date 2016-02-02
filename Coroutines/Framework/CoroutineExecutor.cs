@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Coroutines.Framework
 {
@@ -10,19 +10,18 @@ namespace Coroutines.Framework
     /// hardware threads. This class is not thread-safe.
     /// </summary>
     /// <remarks>
-    /// Coroutines are represented by non-generic IEnumerable objects. They should yield an IEnumerable to transfer
-    /// execution to that coroutine, or yield a TimeSpan to delay execution for the specified amount of time.
-    /// Any other yields will be ignored.
+    /// Coroutines are represented by generic IEnumerable&lt;CoroutineAction&gt; objects. Yielding of null indicates
+    /// that a coroutine should yield execution until the next tick.
     /// </remarks>
     public class CoroutineExecutor : IDisposable
     {
         [ThreadStatic]
         private static Stack<CoroutineExecutor> t_currentExecutors;
-
-        private readonly List<Stack<IEnumerator>> _stacks = new List<Stack<IEnumerator>>();
+        
+        private readonly List<CoroutineThread> _threads = new List<CoroutineThread>(); 
         private TimeSpan _time;
         private TimeSpan _elapsed;
-        private Stack<IEnumerator> _executingStack;
+        private CoroutineThread _executingThread;
 
         /// <summary>
         /// Gets the current time, accumulated from all ticks.
@@ -32,7 +31,12 @@ namespace Coroutines.Framework
         /// <summary>
         /// Gets whether a coroutine is being executed.
         /// </summary>
-        public bool IsExecuting => _executingStack != null;
+        public bool IsExecuting => _executingThread != null;
+
+        /// <summary>
+        /// Gets the currently executing thread if any.
+        /// </summary>
+        public CoroutineThread ExecutingThread => _executingThread;
 
         /// <summary>
         /// Gets the amount of time that has elapsed since the previous tick. This is only valid while a coroutine is
@@ -61,18 +65,20 @@ namespace Coroutines.Framework
         {
             if (elapsed.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(elapsed));
-            if (_executingStack != null)
+            if (_executingThread != null)
                 throw new InvalidOperationException("Recursive ticking not allowed");
 
             _time += elapsed;
 
             int alive = 0;
 
-            for (int i = 0; i < _stacks.Count; i++)
+            for (int i = 0; i < _threads.Count; i++)
             {
-                Stack<IEnumerator> stack = _stacks[i];
+                CoroutineThread thread = _threads[i];
 
-                if (stack.Count != 0 && TickStack(stack, elapsed))
+                TickThread(thread, elapsed);
+
+                if (thread.Status != CoroutineThreadStatus.Finished)
                     alive++;
             }
 
@@ -83,25 +89,14 @@ namespace Coroutines.Framework
         /// Executes a coroutine in a new thread.
         /// </summary>
         /// <param name="enumerable">An enumerable object that can provide a coroutine.</param>
-        public void Execute(IEnumerable enumerable)
+        public CoroutineThread StartThread(IEnumerable<CoroutineAction> enumerable)
         {
             if (enumerable == null)
                 throw new ArgumentNullException(nameof(enumerable));
 
-            Stack<IEnumerator> freeStack = null;
-            for (int i = 0; i < _stacks.Count; i++)
-            {
-                if (_stacks[i].Count == 0)
-                    freeStack = _stacks[i];
-            }
-
-            if (freeStack == null)
-            {
-                freeStack = new Stack<IEnumerator>();
-                _stacks.Add(freeStack);
-            }
-
-            freeStack.Push(enumerable.GetEnumerator());
+            var thread = new CoroutineThread(this, enumerable);
+            _threads.Add(thread);
+            return thread;
         }
 
         /// <summary>
@@ -109,7 +104,7 @@ namespace Coroutines.Framework
         /// </summary>
         /// <param name="seconds">The number of seconds to delay.</param>
         /// <returns>A coroutine producer.</returns>
-        public IEnumerable Delay(double seconds)
+        public IEnumerable<CoroutineAction> Delay(double seconds)
         {
             return Delay(TimeSpan.FromSeconds(seconds));
         }
@@ -119,7 +114,7 @@ namespace Coroutines.Framework
         /// </summary>
         /// <param name="duration">The amount of time to delay.</param>
         /// <returns>A coroutine producer.</returns>
-        public IEnumerable Delay(TimeSpan duration)
+        public IEnumerable<CoroutineAction> Delay(TimeSpan duration)
         {
             if (duration.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(duration));
@@ -135,115 +130,87 @@ namespace Coroutines.Framework
             }
         }
 
-        ///// <summary>
-        ///// Ticks all coroutine threads until they have finished.
-        ///// </summary>
-        ///// <param name="timeFactor"></param>
-        //public void FinishExecution(double? timeFactor = null)
-        //{
-        //    if (!timeFactor.HasValue)
-        //        timeFactor = 1.0;
-        //    if (timeFactor.Value <= 0)
-        //        throw new ArgumentOutOfRangeException(nameof(timeFactor), "timeFactor must be greater than zero");
-
-        //    var sw = Stopwatch.StartNew();
-            
-        //    TimeSpan previousTime = TimeSpan.Zero;
-        //    int living;
-        //    do
-        //    {
-        //        TimeSpan time = TimeSpan.FromTicks((long) (sw.ElapsedTicks * timeFactor.Value));
-
-        //        TimeSpan elapsed = time - previousTime;
-
-        //        previousTime = time;
-
-        //        sw.Stop();
-        //        living = Tick(elapsed);
-        //        sw.Start();
-        //    } while (living != 0);
-        //}
-
-        public virtual void Dispose()
+        /// <summary>
+        /// Executes coroutines in parallel. Stops when any coroutine faults, or when all are finished.
+        /// </summary>
+        /// <param name="enumerables"></param>
+        /// <returns></returns>
+        public IEnumerable<CoroutineAction> Parallel(params IEnumerable<CoroutineAction>[] enumerables)
         {
-            foreach (Stack<IEnumerator> stack in _stacks)
+            if (enumerables == null)
+                throw new ArgumentNullException(nameof(enumerables));
+            
+            CoroutineThread[] threads = enumerables.Select(StartThread).ToArray();
+
+            while (true)
             {
-                while (stack.Count != 0)
-                    (stack.Pop() as IDisposable)?.Dispose();
+                if (threads.Any(t => t.Status == CoroutineThreadStatus.Faulted))
+                    yield break;
+
+                if (threads.All(t => t.Status == CoroutineThreadStatus.Finished))
+                    yield break;
+
+                yield return null;
             }
         }
 
-        private bool TickStack(Stack<IEnumerator> stack, TimeSpan elapsed)
+        /// <summary>
+        /// Ticks all coroutine threads until they have finished.
+        /// </summary>
+        /// <param name="timeFactor"></param>
+        public void Finish(double? timeFactor = null)
+        {
+            if (!timeFactor.HasValue)
+                timeFactor = 1.0;
+            if (timeFactor.Value <= 0)
+                throw new ArgumentOutOfRangeException(nameof(timeFactor), "timeFactor must be greater than zero");
+
+            var sw = Stopwatch.StartNew();
+
+            TimeSpan previousTime = TimeSpan.Zero;
+            int living;
+            do
+            {
+                TimeSpan newTime = TimeSpan.FromTicks((long) (sw.ElapsedTicks * timeFactor.Value));
+
+                TimeSpan elapsed = newTime - previousTime;
+
+                previousTime = newTime;
+                
+                living = Tick(elapsed);
+            } while (living != 0);
+        }
+
+        public virtual void Dispose()
+        {
+            while (_threads.Count != 0)
+                _threads[_threads.Count - 1].Dispose();
+        }
+
+        internal void OnThreadDisposed(CoroutineThread thread)
+        {
+            _threads.Remove(thread);
+        }
+
+        private void TickThread(CoroutineThread thread, TimeSpan elapsed)
         {
             Stack<CoroutineExecutor> currentExecutors = t_currentExecutors;
             if (currentExecutors == null)
                 t_currentExecutors = currentExecutors = new Stack<CoroutineExecutor>();
 
             currentExecutors.Push(this);
-            _executingStack = stack;
+            _executingThread = thread;
             _elapsed = elapsed;
             try
             {
-                // Loop continues until null or unrecognized yield.
-                while (true)
-                {
-                    IEnumerator top = stack.Peek();
-
-                    bool result;
-                    try
-                    {
-                        result = top.MoveNext();
-                    }
-                    catch
-                    {
-                        stack.Pop();
-                        (top as IDisposable)?.Dispose();
-                        throw;
-                    }
-
-                    Debug.Assert(stack.Count != 0 && stack.Peek() == top);
-
-                    if (result)
-                    {
-                        object current = top.Current;
-                        if (current != null)
-                        {
-                            TimeSpan? nextDelay;
-                            IEnumerable nextEnumerable;
-
-                            if ((nextEnumerable = current as IEnumerable) != null)
-                            {
-                                stack.Push(nextEnumerable.GetEnumerator());
-                            }
-                            else if ((nextDelay = current as TimeSpan?) != null && nextDelay.Value.Ticks > 0)
-                            {
-                                stack.Push(Delay(nextDelay.Value).GetEnumerator());
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        stack.Pop();
-                        (top as IDisposable)?.Dispose();
-                    }
-                }
+                thread.Tick();
             }
             finally
             {
-                _executingStack = null;
+                _executingThread = null;
                 _elapsed = TimeSpan.Zero;
                 currentExecutors.Pop();
             }
-
-            return stack.Count != 0;
         }
     }
 }
