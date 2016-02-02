@@ -6,7 +6,7 @@ namespace Coroutines.Framework
     /// <summary>
     /// An action that delays execution of the current thread for an amount of time.
     /// </summary>
-    public sealed class DelayAction : CoroutineAction
+    public class DelayAction : CoroutineAction
     {
         public DelayAction(TimeSpan time)
         {

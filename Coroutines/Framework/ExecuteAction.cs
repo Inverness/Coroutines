@@ -6,7 +6,7 @@ namespace Coroutines.Framework
     /// <summary>
     /// An action that executes a coroutine on the current thread.
     /// </summary>
-    public sealed class ExecuteAction : CoroutineAction
+    public class ExecuteAction : CoroutineAction
     {
         public ExecuteAction(IEnumerable<CoroutineAction> enumerable)
         {

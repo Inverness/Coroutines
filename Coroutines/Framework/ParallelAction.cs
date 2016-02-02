@@ -6,7 +6,7 @@ namespace Coroutines.Framework
     /// <summary>
     /// An action that executes coroutines in parallel.
     /// </summary>
-    public sealed class ParallelAction : CoroutineAction
+    public class ParallelAction : CoroutineAction
     {
         public ParallelAction(params IEnumerable<CoroutineAction>[] enumerables)
         {
