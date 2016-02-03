@@ -121,13 +121,8 @@ namespace Coroutines.Framework
 
             TimeSpan endTime = _time + duration;
 
-            while (true)
-            {
-                if (_time < endTime)
-                    yield return null;
-                else
-                    yield break;
-            }
+            while (_time < endTime)
+                yield return null;
         }
 
         /// <summary>
@@ -141,6 +136,9 @@ namespace Coroutines.Framework
                 throw new ArgumentNullException(nameof(enumerables));
             
             CoroutineThread[] threads = enumerables.Select(StartThread).ToArray();
+
+            if (threads.Length == 0)
+                yield break;
 
             while (true)
             {
