@@ -36,6 +36,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FrameworkTests.cs" />
+    <Compile Include="CoroutineSerializationTests.cs" />
     <Compile Include="IteratorSerializationTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

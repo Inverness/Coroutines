@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.Serialization;
 
 namespace Coroutines.Framework
 {
@@ -13,12 +14,16 @@ namespace Coroutines.Framework
     /// Coroutines are represented by generic IEnumerable&lt;CoroutineAction&gt; objects. Yielding of null indicates
     /// that a coroutine should yield execution until the next tick.
     /// </remarks>
+    [DataContract]
     public class CoroutineExecutor : IDisposable
     {
         [ThreadStatic]
         private static Stack<CoroutineExecutor> t_currentExecutors;
         
-        private readonly List<CoroutineThread> _threads = new List<CoroutineThread>(); 
+        [DataMember(Name = "Threads")]
+        private readonly List<CoroutineThread> _threads = new List<CoroutineThread>();
+
+        [DataMember(Name = "Time")]
         private TimeSpan _time;
         private TimeSpan _elapsed;
         private CoroutineThread _executingThread;
@@ -43,6 +48,11 @@ namespace Coroutines.Framework
         /// being executed.
         /// </summary>
         public TimeSpan ElapsedTime => _elapsed;
+
+        /// <summary>
+        /// Gets a list of current coroutine threads.
+        /// </summary>
+        public IReadOnlyList<CoroutineThread> Threads => _threads; 
 
         /// <summary>
         /// Gets the thread's current executor if any. This will be the most nested executor if there is more than one.
@@ -78,7 +88,7 @@ namespace Coroutines.Framework
 
                 TickThread(thread, elapsed);
 
-                if (thread.Status != CoroutineThreadStatus.Finished)
+                if (thread.Status < CoroutineThreadStatus.Finished)
                     alive++;
             }
 
@@ -104,7 +114,7 @@ namespace Coroutines.Framework
         /// </summary>
         /// <param name="seconds">The number of seconds to delay.</param>
         /// <returns>A coroutine producer.</returns>
-        public IEnumerable<CoroutineAction> Delay(double seconds)
+        public IEnumerable<CoroutineAction> DelaySeconds(double seconds)
         {
             return Delay(TimeSpan.FromSeconds(seconds));
         }
@@ -199,6 +209,30 @@ namespace Coroutines.Framework
         internal void OnThreadDisposed(CoroutineThread thread)
         {
             _threads.Remove(thread);
+        }
+
+        protected virtual void OnSerializing(StreamingContext context)
+        {
+            if (_executingThread != null)
+                throw new InvalidOperationException("Can't serialize while executing");
+        }
+
+        protected virtual void OnDeserialized(StreamingContext context)
+        {
+            foreach (CoroutineThread thread in _threads)
+                thread.Executor = this;
+        }
+
+        [OnSerializing]
+        private void OnSerializingCallback(StreamingContext context)
+        {
+            OnSerializing(context);
+        }
+
+        [OnDeserialized]
+        private void OnDeserializedCallback(StreamingContext context)
+        {
+            OnDeserialized(context);
         }
 
         private void TickThread(CoroutineThread thread, TimeSpan elapsed)

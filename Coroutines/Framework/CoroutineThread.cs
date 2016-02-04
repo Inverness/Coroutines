@@ -1,22 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Serialization;
 
 namespace Coroutines.Framework
 {
     /// <summary>
     /// Describes a thread of execution for a coroutine.
     /// </summary>
+    [DataContract]
     public sealed class CoroutineThread : IDisposable
     {
-        private readonly CoroutineExecutor _executor;
+        [DataMember(Name = "Stack")]
         private readonly Stack<IEnumerator<CoroutineAction>> _stack;
 
         internal CoroutineThread(CoroutineExecutor executor, IEnumerable<CoroutineAction> enumerable)
         {
-            _executor = executor;
+            Executor = executor;
             _stack = new Stack<IEnumerator<CoroutineAction>>(4);
             _stack.Push(enumerable.GetEnumerator());
+        }
+        
+        // Deserialization constructor
+        private CoroutineThread()
+        {
         }
 
         /// <summary>
@@ -27,16 +34,18 @@ namespace Coroutines.Framework
         /// <summary>
         /// Gets the executor that created this thread.
         /// </summary>
-        public CoroutineExecutor Executor => _executor;
+        public CoroutineExecutor Executor { get; internal set; }
 
         /// <summary>
         /// Gets the status of this thread.
         /// </summary>
+        [DataMember]
         public CoroutineThreadStatus Status { get; private set; }
 
         /// <summary>
         /// Gets the exception that caused this thread to fault if any.
         /// </summary>
+        [DataMember]
         public Exception Exception { get; private set; }
 
         /// <summary>
@@ -61,7 +70,7 @@ namespace Coroutines.Framework
             }
             finally
             {
-                _executor.OnThreadDisposed(this);
+                Executor.OnThreadDisposed(this);
             }
         }
 

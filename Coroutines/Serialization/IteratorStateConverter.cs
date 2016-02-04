@@ -128,8 +128,7 @@ namespace Coroutines.Serialization
 
             TypeInfo declaringTypeInfo = declaringType.GetTypeInfo();
 
-            MethodInfo method =
-                declaringTypeInfo.GetDeclaredMethod(methodName);//.OfType<MethodInfo>().FirstOrDefault(m => m.Name == methodName);//.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo method = declaringTypeInfo.GetDeclaredMethod(methodName);
             if (method == null || !(s_enumeratorType.IsAssignableFrom(method.ReturnType.GetTypeInfo()) || s_enumerableType.IsAssignableFrom(method.ReturnType.GetTypeInfo())))
                 throw new ArgumentException("invalid iterator method name: " + methodName, nameof(methodName));
 
