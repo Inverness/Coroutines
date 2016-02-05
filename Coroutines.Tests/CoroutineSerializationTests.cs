@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters;
 using Coroutines.Framework;
 using Coroutines.Serialization;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Xunit;
 using Xunit.Abstractions;
 using static Coroutines.Framework.CoroutineAction;
@@ -66,17 +65,24 @@ namespace Coroutines.Tests
             Assert.True(thread.Status == CoroutineThreadStatus.Yielded);
 
             var serializer = new JsonSerializer();
-            serializer.Converters.Add(new CoroutineConverter());
+            serializer.Converters.Add(new CoroutineConverter(true, false));
 
             var settings = new JsonSerializerSettings
             {
                 Formatting = Formatting.Indented,
-                PreserveReferencesHandling = PreserveReferencesHandling.Objects,
-                Converters = new JsonConverter[] {new CoroutineConverter(), new FromStringConverter(),  },
+                Converters = new JsonConverter[] { new CoroutineConverter(true, false), new NameValueDictionaryConverter() },
                 TypeNameHandling = TypeNameHandling.Auto
             };
 
             string resultString = JsonConvert.SerializeObject(exc, settings);
+
+            //var dcss = new DataContractSerializerSettings {PreserveObjectReferences = true};
+            //var dcs = new DataContractSerializer(typeof(CoroutineExecutor), dcss);
+            //var ms = new MemoryStream();
+            //dcs.WriteObject(ms, exc);
+
+            //var dat = ms.ToArray();
+            //var mss = Encoding.UTF8.GetString(dat, 0, dat.Length);
 
             exc.Tick(TimeSpan.FromSeconds(0.55));
 
@@ -110,6 +116,15 @@ namespace Coroutines.Tests
         private static readonly TypeInfo s_coroutineTypeInfo = typeof (IEnumerator<CoroutineAction>).GetTypeInfo();
         private readonly IteratorStateConverter _isc = new IteratorStateConverter();
 
+        private readonly bool _withThis;
+        private readonly bool _withCurrent;
+
+        public CoroutineConverter(bool withThis, bool withCurrent)
+        {
+            _withThis = withThis;
+            _withCurrent = withCurrent;
+        }
+
         public override bool CanConvert(Type objectType)
         {
             return s_coroutineTypeInfo.IsAssignableFrom(objectType.GetTypeInfo());
@@ -118,6 +133,9 @@ namespace Coroutines.Tests
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
             IteratorState state = _isc.ToState((IEnumerator<CoroutineAction>) value);
+
+            Exclude(state);
+
             serializer.Serialize(writer, state);
         }
 
@@ -125,55 +143,180 @@ namespace Coroutines.Tests
         {
             var state = serializer.Deserialize<IteratorState>(reader);
 
+            Exclude(state);
+
             var result = (IEnumerator<CoroutineAction>) _isc.FromState(state);
 
             return result;
         }
+
+        private void Exclude(IteratorState state)
+        {
+            if (!_withThis)
+                state.This = null;
+            if (!_withCurrent)
+                state.Current = null;
+        }
     }
 
-    public class FromStringConverter : JsonConverter
+    public class NameValueDictionaryConverter : JsonConverter
     {
-        private static readonly Dictionary<Type, Func<string, object>> s_types =
-            new Dictionary<Type, Func<string, object>>
-            {
-                {typeof (TimeSpan), s => TimeSpan.Parse(s)},
-                {typeof (Guid), s => Guid.Parse(s)}
-            };
-
         public override bool CanConvert(Type objectType)
         {
-            return s_types.ContainsKey(objectType);
+            return objectType == typeof (Dictionary<string, object>);
         }
 
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
             writer.WriteStartObject();
-            writer.WritePropertyName("$type");
-            writer.WriteValue(value.GetType().FullName);
-            writer.WritePropertyName("$value");
-            writer.WriteValue(value);
+
+            foreach (KeyValuePair<string, object> item in (Dictionary<string, object>) value)
+            {
+                writer.WritePropertyName(item.Key);
+                WriteObject(writer, item.Value, serializer);
+            }
+
             writer.WriteEndObject();
         }
 
-        public override object ReadJson(JsonReader reader, Type type, object value, JsonSerializer serializer)
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            reader.Read();
-            if (reader.TokenType != JsonToken.PropertyName || (string) reader.Value != "$type")
-                throw new JsonSerializationException("expected $type");
+            VerifyTokenType(reader, JsonToken.StartObject);
+
+            var dict = (Dictionary<string, object>) existingValue ?? new Dictionary<string, object>();
+
+            while (reader.Read() && reader.TokenType == JsonToken.PropertyName)
+            {
+                var name = (string) reader.Value;
+
+                reader.Read();
+
+                object value = ReadObject(reader, serializer);
+
+                dict[name] = value;
+            }
+
+            return dict;
+        }
+
+        private static void WriteObject(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            Type valueType = value.GetType();
+            TypeInfo valueTypeInfo = valueType.GetTypeInfo();
+
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("$type");
+            writer.WriteValue(NameUtility.GetSimpleAssemblyQualifiedName(valueType));
+
+            writer.WritePropertyName("$value");
+            
+            if (valueTypeInfo.IsPrimitive)
+                writer.WriteValue(value);
+            else
+                serializer.Serialize(writer, value);
+
+            writer.WriteEndObject();
+        }
+
+        private static object ReadObject(JsonReader reader, JsonSerializer serializer)
+        {
+            if (reader.TokenType == JsonToken.Null)
+                return null;
+
+            VerifyTokenType(reader, JsonToken.StartObject);
 
             reader.Read();
+            VerifyTokenType(reader, JsonToken.PropertyName);
+            VerifyValue(reader, "$type");
 
             reader.Read();
-            if (reader.TokenType != JsonToken.PropertyName || (string) reader.Value != "$value")
-                throw new JsonSerializationException("expected $value");
+            VerifyTokenType(reader, JsonToken.String);
+
+            Type valueType = Type.GetType((string) reader.Value);
+            TypeInfo valueTypeInfo = valueType.GetTypeInfo();
+
+            reader.Read();
+            VerifyTokenType(reader, JsonToken.PropertyName);
+            VerifyValue(reader, "$value");
 
             reader.Read();
 
-            string s = (string) reader.Value;
+            object result;
+            if (valueTypeInfo.IsPrimitive)
+            {
+                result = reader.ValueType == valueType ? reader.Value : Convert.ChangeType(reader.Value, valueType);
+            }
+            else
+            {
+                result = serializer.Deserialize(reader, valueType);
+            }
 
             reader.Read();
+            VerifyTokenType(reader, JsonToken.EndObject);
 
-            return s_types[type](s);
+            return result;
+        }
+
+        private static void VerifyTokenType(JsonReader reader, JsonToken type)
+        {
+            if (reader.TokenType != type)
+                throw new JsonSerializationException("expected " + type);
+        }
+
+        private static void VerifyValue(JsonReader reader, string value)
+        {
+            if (reader.Value as string != value)
+                throw new JsonSerializationException("expected value " + value);
+        }
+    }
+
+    public sealed class PrimitiveJsonConverter : JsonConverter
+    {
+        public override bool CanRead => false;
+
+        public override bool CanConvert(Type objectType)
+        {
+            return objectType.GetTypeInfo().IsPrimitive;
+        }
+
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            switch (serializer.TypeNameHandling)
+            {
+                case TypeNameHandling.All:
+                    writer.WriteStartObject();
+                    writer.WritePropertyName("$type", false);
+
+                    switch (serializer.TypeNameAssemblyFormat)
+                    {
+                        case FormatterAssemblyStyle.Full:
+                            writer.WriteValue(value.GetType().AssemblyQualifiedName);
+                            break;
+                        default:
+                            writer.WriteValue(value.GetType().FullName);
+                            break;
+                    }
+
+                    writer.WritePropertyName("$value", false);
+                    writer.WriteValue(value);
+                    writer.WriteEndObject();
+                    break;
+                default:
+                    writer.WriteValue(value);
+                    break;
+            }
         }
     }
 }

@@ -3,8 +3,13 @@ using System.Reflection;
 
 namespace Coroutines.Serialization
 {
-    internal class NameUtility
+    public static class NameUtility
     {
+        /// <summary>
+        /// Parse the original name inside angle brackets from a compiler-generated name.
+        /// </summary>
+        /// <param name="name">A compiler generated name.</param>
+        /// <returns>The original name, or the name argument if it was not compiler-generated.</returns>
         public static string ParseOriginalName(string name)
         {
             char typeChar;
@@ -13,6 +18,14 @@ namespace Coroutines.Serialization
             return TryParseGeneratedName(name, out typeChar, out suffix, out original) ? original : name;
         }
 
+        /// <summary>
+        /// Parse the components of a compiler generated name.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="typeChar"></param>
+        /// <param name="suffix"></param>
+        /// <param name="original"></param>
+        /// <returns></returns>
         public static bool TryParseGeneratedName(
             string name,
             out char typeChar,
@@ -41,6 +54,11 @@ namespace Coroutines.Serialization
             return true;
         }
 
+        /// <summary>
+        /// Create an assembly qualified name with only the assembly's name and not any additional information.
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
         public static string GetSimpleAssemblyQualifiedName(Type type)
         {
             return type.FullName + ", " + type.GetTypeInfo().Assembly.GetName().Name;

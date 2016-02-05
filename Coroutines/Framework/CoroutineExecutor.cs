@@ -14,7 +14,7 @@ namespace Coroutines.Framework
     /// Coroutines are represented by generic IEnumerable&lt;CoroutineAction&gt; objects. Yielding of null indicates
     /// that a coroutine should yield execution until the next tick.
     /// </remarks>
-    [DataContract]
+    [DataContract(IsReference = true)]
     public class CoroutineExecutor : IDisposable
     {
         [ThreadStatic]

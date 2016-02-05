@@ -8,7 +8,7 @@ namespace Coroutines.Framework
     /// <summary>
     /// Describes a thread of execution for a coroutine.
     /// </summary>
-    [DataContract]
+    [DataContract(IsReference = true)]
     public sealed class CoroutineThread : IDisposable
     {
         [DataMember(Name = "Stack")]
