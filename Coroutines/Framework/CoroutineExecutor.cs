@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -17,15 +18,12 @@ namespace Coroutines.Framework
     [DataContract(IsReference = true)]
     public class CoroutineExecutor : IDisposable
     {
-        [ThreadStatic]
-        private static Stack<CoroutineExecutor> t_currentExecutors;
         
         [DataMember(Name = "Threads")]
         private readonly List<CoroutineThread> _threads = new List<CoroutineThread>();
 
         [DataMember(Name = "Time")]
         private TimeSpan _time;
-        private TimeSpan _elapsed;
         private CoroutineThread _executingThread;
 
         /// <summary>
@@ -44,27 +42,9 @@ namespace Coroutines.Framework
         public CoroutineThread ExecutingThread => _executingThread;
 
         /// <summary>
-        /// Gets the amount of time that has elapsed since the previous tick. This is only valid while a coroutine is
-        /// being executed.
-        /// </summary>
-        public TimeSpan ElapsedTime => _elapsed;
-
-        /// <summary>
         /// Gets a list of current coroutine threads.
         /// </summary>
-        public IReadOnlyList<CoroutineThread> Threads => _threads; 
-
-        /// <summary>
-        /// Gets the thread's current executor if any. This will be the most nested executor if there is more than one.
-        /// </summary>
-        public static CoroutineExecutor Current
-        {
-            get
-            {
-                Stack<CoroutineExecutor> stack = t_currentExecutors;
-                return stack != null && stack.Count != 0 ? stack.Peek() : null;
-            }
-        }
+        public IReadOnlyList<CoroutineThread> Threads => _threads;
 
         /// <summary>
         /// Ticks all living coroutines, advancing time by the specified amount.
@@ -98,13 +78,13 @@ namespace Coroutines.Framework
         /// <summary>
         /// Executes a coroutine in a new thread.
         /// </summary>
-        /// <param name="enumerable">An enumerable object that can provide a coroutine.</param>
-        public CoroutineThread StartThread(IEnumerable<CoroutineAction> enumerable)
+        /// <param name="cor">An enumerable object that can provide a coroutine.</param>
+        public CoroutineThread Start(IEnumerable cor)
         {
-            if (enumerable == null)
-                throw new ArgumentNullException(nameof(enumerable));
+            if (cor == null)
+                throw new ArgumentNullException(nameof(cor));
 
-            var thread = new CoroutineThread(this, enumerable);
+            var thread = new CoroutineThread(this, cor);
             _threads.Add(thread);
             return thread;
         }
@@ -112,19 +92,9 @@ namespace Coroutines.Framework
         /// <summary>
         /// Returns a coroutine that finishes once the specified amount of time has passed.
         /// </summary>
-        /// <param name="seconds">The number of seconds to delay.</param>
-        /// <returns>A coroutine producer.</returns>
-        public IEnumerable<CoroutineAction> DelaySeconds(double seconds)
-        {
-            return Delay(TimeSpan.FromSeconds(seconds));
-        }
-
-        /// <summary>
-        /// Returns a coroutine that finishes once the specified amount of time has passed.
-        /// </summary>
         /// <param name="duration">The amount of time to delay.</param>
         /// <returns>A coroutine producer.</returns>
-        public IEnumerable<CoroutineAction> Delay(TimeSpan duration)
+        public IEnumerable Delay(TimeSpan duration)
         {
             if (duration.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(duration));
@@ -138,14 +108,14 @@ namespace Coroutines.Framework
         /// <summary>
         /// Executes coroutines in parallel. Stops when any coroutine faults, or when all are finished.
         /// </summary>
-        /// <param name="enumerables"></param>
+        /// <param name="cors"></param>
         /// <returns></returns>
-        public IEnumerable<CoroutineAction> Parallel(params IEnumerable<CoroutineAction>[] enumerables)
+        public IEnumerable Parallel(params IEnumerable[] cors)
         {
-            if (enumerables == null)
-                throw new ArgumentNullException(nameof(enumerables));
+            if (cors == null)
+                throw new ArgumentNullException(nameof(cors));
             
-            CoroutineThread[] threads = enumerables.Select(StartThread).ToArray();
+            CoroutineThread[] threads = cors.Select(Start).ToArray();
 
             if (threads.Length == 0)
                 yield break;
@@ -180,7 +150,7 @@ namespace Coroutines.Framework
             if (factor <= 0)
                 throw new ArgumentOutOfRangeException(nameof(factor), "timeFactor must be greater than zero");
 
-            var sw = Stopwatch.StartNew();
+            Stopwatch sw = Stopwatch.StartNew();
 
             TimeSpan previousTime = TimeSpan.Zero;
             int living;
@@ -237,22 +207,14 @@ namespace Coroutines.Framework
 
         private void TickThread(CoroutineThread thread, TimeSpan elapsed)
         {
-            Stack<CoroutineExecutor> currentExecutors = t_currentExecutors;
-            if (currentExecutors == null)
-                t_currentExecutors = currentExecutors = new Stack<CoroutineExecutor>();
-
-            currentExecutors.Push(this);
             _executingThread = thread;
-            _elapsed = elapsed;
             try
             {
-                thread.Tick();
+                thread.Tick(elapsed);
             }
             finally
             {
                 _executingThread = null;
-                _elapsed = TimeSpan.Zero;
-                currentExecutors.Pop();
             }
         }
     }

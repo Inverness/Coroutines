@@ -35,12 +35,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Framework\CoroutineAction.cs" />
+    <Compile Include="Framework\CoroutineActionBehavior.cs" />
     <Compile Include="Framework\CoroutineExecutor.cs" />
     <Compile Include="Framework\CoroutineThread.cs" />
     <Compile Include="Framework\CoroutineThreadStatus.cs" />
     <Compile Include="Framework\DelayAction.cs" />
-    <Compile Include="Framework\ExecuteAction.cs" />
     <Compile Include="Framework\ParallelAction.cs" />
+    <Compile Include="Framework\ResultAction.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Serialization\IteratorState.cs" />
     <Compile Include="Serialization\IteratorStateConverter.cs" />

@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections;
 
 namespace Coroutines.Framework
 {
@@ -8,18 +8,20 @@ namespace Coroutines.Framework
     /// </summary>
     public class ParallelAction : CoroutineAction
     {
-        public ParallelAction(params IEnumerable<CoroutineAction>[] enumerables)
+        public ParallelAction(params IEnumerable[] enumerables)
         {
             if (enumerables == null)
                 throw new ArgumentNullException(nameof(enumerables));
             Enumerables = enumerables;
         }
 
-        public IEnumerable<CoroutineAction>[] Enumerables { get; }
+        public IEnumerable[] Enumerables { get; private set; }
 
-        public override IEnumerable<CoroutineAction> GetNext(CoroutineThread thread)
+        public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            return thread.Executor.Parallel(Enumerables);
+            cor = thread.Executor.Parallel(Enumerables);
+            Enumerables = null;
+            return CoroutineActionBehavior.Push;
         }
     }
 }

@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections;
 
 namespace Coroutines.Framework
 {
@@ -17,9 +17,10 @@ namespace Coroutines.Framework
 
         public TimeSpan Time { get; }
 
-        public override IEnumerable<CoroutineAction> GetNext(CoroutineThread thread)
+        public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            return thread.Executor.Delay(Time);
+            cor = thread.Executor.Delay(Time);
+            return CoroutineActionBehavior.Push;
         }
     }
 }

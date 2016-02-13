@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.Serialization;
@@ -12,12 +13,17 @@ namespace Coroutines.Framework
     public sealed class CoroutineThread : IDisposable
     {
         [DataMember(Name = "Stack")]
-        private readonly Stack<IEnumerator<CoroutineAction>> _stack;
+        private readonly Stack<IEnumerator> _stack;
 
-        internal CoroutineThread(CoroutineExecutor executor, IEnumerable<CoroutineAction> enumerable)
+        [ThreadStatic]
+        private static Stack<CoroutineThread> t_currentThreads;
+
+        private TimeSpan _elapsed;
+
+        internal CoroutineThread(CoroutineExecutor executor, IEnumerable enumerable)
         {
             Executor = executor;
-            _stack = new Stack<IEnumerator<CoroutineAction>>(4);
+            _stack = new Stack<IEnumerator>(4);
             _stack.Push(enumerable.GetEnumerator());
         }
         
@@ -49,6 +55,51 @@ namespace Coroutines.Framework
         public Exception Exception { get; private set; }
 
         /// <summary>
+        /// Gets the current coroutine result if any.
+        /// </summary>
+        public object Result { get; internal set; }
+
+        /// <summary>
+        /// Gets the amount of time that has elapsed since the previous execution. This is only valid while a
+        /// coroutine is being executed.
+        /// </summary>
+        public TimeSpan ElapsedTime => _elapsed;
+
+        /// <summary>
+        /// Gets the currently executing thread if any.
+        /// </summary>
+        public static CoroutineThread Current
+        {
+            get
+            {
+                Stack<CoroutineThread> stack = t_currentThreads;
+                return stack != null && stack.Count != 0 ? stack.Peek() : null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the current thread result cast to the specified type.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public T GetResult<T>()
+        {
+            return (T) Result;
+        }
+
+        /// <summary>
+        /// Gets the current thread result cast to the specified type, or default(T) if Result is null.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public T GetResultOrDefault<T>()
+        {
+            if (Result != null)
+                return (T) Result;
+            return default(T);
+        }
+
+        /// <summary>
         /// Disposes the thread and sets the status to Finished.
         /// </summary>
         public void Dispose()
@@ -60,13 +111,13 @@ namespace Coroutines.Framework
         {
             if (Status >= CoroutineThreadStatus.Finished)
                 return;
-
+            
             Exception = ex;
             Status = ex != null ? CoroutineThreadStatus.Faulted : CoroutineThreadStatus.Finished;
             try
             {
                 while (_stack.Count != 0)
-                    _stack.Pop().Dispose();
+                    (_stack.Pop() as IDisposable)?.Dispose();
             }
             finally
             {
@@ -74,58 +125,106 @@ namespace Coroutines.Framework
             }
         }
 
-        internal void Tick()
+        internal void Tick(TimeSpan elapsed)
         {
-            Stack<IEnumerator<CoroutineAction>> stack = _stack;
+            Stack<CoroutineThread> currentThreads = t_currentThreads;
+            if (currentThreads == null)
+                t_currentThreads = currentThreads = new Stack<CoroutineThread>();
 
-            // Loop continues until null
-            while (true)
+            currentThreads.Push(this);
+
+            _elapsed = elapsed;
+            
+            try
             {
-                IEnumerator<CoroutineAction> top = stack.Peek();
+                Stack<IEnumerator> stack = _stack;
 
-                bool result;
-                try
+                bool shouldYield = false;
+                while (!shouldYield)
                 {
+                    IEnumerator top = stack.Peek();
+
                     Status = CoroutineThreadStatus.Executing;
 
-                    result = top.MoveNext();
+                    bool hasResult = top.MoveNext();
 
                     Status = CoroutineThreadStatus.Yielded;
-                }
-                catch (Exception ex)
-                {
-                    Dispose(ex);
-                    throw;
-                }
 
-                Debug.Assert(stack.Count != 0 && stack.Peek() == top);
+                    Debug.Assert(stack.Count != 0 && stack.Peek() == top);
 
-                if (result)
-                {
-                    CoroutineAction action = top.Current;
-                    IEnumerable<CoroutineAction> next;
-
-                    if ((next = action?.GetNext(this)) != null)
+                    bool shouldPop = false;
+                    if (hasResult)
                     {
-                        stack.Push(next.GetEnumerator());
-                        // Actions are processed immediately without yielding.
+                        object result = top.Current;
+                        if (result != null)
+                        {
+                            IEnumerable enumerable;
+                            CoroutineAction action;
+
+                            if ((enumerable = result as IEnumerable) != null)
+                            {
+                                stack.Push(enumerable.GetEnumerator());
+                            }
+                            else if ((action = result as CoroutineAction) != null)
+                            {
+                                IEnumerable next = null;
+                                switch (action.Process(this, ref next))
+                                {
+                                    case CoroutineActionBehavior.Yield:
+                                        shouldYield = true;
+                                        break;
+                                    case CoroutineActionBehavior.Push:
+                                        if (next == null)
+                                            throw new InvalidOperationException("no new frame specified");
+                                        stack.Push(next.GetEnumerator());
+                                        break;
+                                    case CoroutineActionBehavior.Pop:
+                                        shouldPop = true;
+                                        break;
+                                    default:
+                                        throw new NotImplementedException();
+                                }
+                            }
+                            else
+                            {
+                                shouldYield = true;
+                            }
+                        }
+                        else
+                        {
+                            shouldYield = true;
+                        }
                     }
                     else
                     {
-                        break;
+                        shouldPop = true;
                     }
-                }
-                else
-                {
-                    stack.Pop();
-                    top.Dispose();
 
-                    if (stack.Count == 0)
+                    if (shouldPop)
                     {
-                        Dispose();
-                        break;
+                        stack.Pop();
+                        (top as IDisposable)?.Dispose();
+
+                        if (stack.Count == 0)
+                        {
+                            Dispose();
+                            shouldYield = true;
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Dispose(ex);
+                throw;
+            }
+            finally
+            {
+                // Since actions are executed immediately, a coroutine lower on the stack will have no trouble receiving
+                // the result of a coroutine it invoked. Otherwise, results are cleared after yielding.
+                Result = null;
+
+                currentThreads.Pop();
             }
         }
     }
