@@ -66,7 +66,15 @@ namespace Coroutines.Framework
             {
                 CoroutineThread thread = _threads[i];
 
-                TickThread(thread, elapsed);
+                _executingThread = thread;
+                try
+                {
+                    thread.Tick(elapsed);
+                }
+                finally
+                {
+                    _executingThread = null;
+                }
 
                 if (thread.Status < CoroutineThreadStatus.Finished)
                     alive++;
@@ -203,19 +211,6 @@ namespace Coroutines.Framework
         private void OnDeserializedCallback(StreamingContext context)
         {
             OnDeserialized(context);
-        }
-
-        private void TickThread(CoroutineThread thread, TimeSpan elapsed)
-        {
-            _executingThread = thread;
-            try
-            {
-                thread.Tick(elapsed);
-            }
-            finally
-            {
-                _executingThread = null;
-            }
         }
     }
 }
