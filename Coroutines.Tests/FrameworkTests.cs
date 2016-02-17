@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Diagnostics;
 using Coroutines.Framework;
 using Xunit;
 using Xunit.Abstractions;
@@ -23,9 +21,29 @@ namespace Coroutines.Tests
         {
             var ce = new CoroutineExecutor();
 
-            ce.StartThread(FrameworkCoroutines.Simple(3));
+            ce.Start(FrameworkCoroutines.Simple(3));
 
-            ce.Finish();
+            Run(ce);
+        }
+
+        private static void Run(CoroutineExecutor ce)
+        {
+            Stopwatch sw = Stopwatch.StartNew();
+
+            TimeSpan previousTime = TimeSpan.Zero;
+
+            TimeSpan elapsed;
+            do
+            {
+                checked
+                {
+                    TimeSpan newTime = sw.Elapsed;
+
+                    elapsed = newTime - previousTime;
+
+                    previousTime = newTime;
+                }
+            } while (ce.Tick(elapsed));
         }
     }
 

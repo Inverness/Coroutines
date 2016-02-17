@@ -28,7 +28,7 @@ namespace Coroutines.Tests
 
             var exc = new CoroutineExecutor();
 
-            var thread = exc.StartThread(t.DelaySeconds(1));
+            var thread = exc.Start(t.DelaySeconds(1));
 
             Assert.True(thread.Status == CoroutineThreadStatus.Yielded);
 
@@ -52,7 +52,7 @@ namespace Coroutines.Tests
 
             var exc = new CoroutineExecutor();
 
-            var thread = exc.StartThread(t.DelaySeconds(1));
+            var thread = exc.Start(t.DelaySeconds(1));
 
             Assert.True(thread.Status == CoroutineThreadStatus.Yielded);
 
