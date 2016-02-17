@@ -50,8 +50,8 @@ namespace Coroutines.Framework
         /// Ticks all living coroutines, advancing time by the specified amount.
         /// </summary>
         /// <param name="elapsed">The time that has elapsed since the previous tick.</param>
-        /// <returns>The number of living coroutine threads.</returns>
-        public int Tick(TimeSpan elapsed)
+        /// <returns>Whether any threads are still alive.</returns>
+        public bool Tick(TimeSpan elapsed)
         {
             if (elapsed.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(elapsed));
@@ -59,8 +59,6 @@ namespace Coroutines.Framework
                 throw new InvalidOperationException("Recursive ticking not allowed");
 
             _time += elapsed;
-
-            int alive = 0;
 
             for (int i = 0; i < _threads.Count; i++)
             {
@@ -75,12 +73,9 @@ namespace Coroutines.Framework
                 {
                     _executingThread = null;
                 }
-
-                if (thread.Status < CoroutineThreadStatus.Finished)
-                    alive++;
             }
 
-            return alive;
+            return _threads.Count != 0;
         }
 
         /// <summary>
@@ -107,10 +102,7 @@ namespace Coroutines.Framework
             if (duration.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(duration));
 
-            TimeSpan endTime = _time + duration;
-
-            while (_time < endTime)
-                yield return null;
+            return DelayImpl(_time + duration);
         }
 
         /// <summary>
@@ -122,60 +114,10 @@ namespace Coroutines.Framework
         {
             if (cors == null)
                 throw new ArgumentNullException(nameof(cors));
+            if (cors.Length < 2)
+                throw new ArgumentException("must specify at least two coroutines", nameof(cors));
             
-            CoroutineThread[] threads = cors.Select(Start).ToArray();
-
-            if (threads.Length == 0)
-                yield break;
-
-            while (true)
-            {
-                if (threads.Any(t => t.Status == CoroutineThreadStatus.Faulted))
-                    yield break;
-
-                if (threads.All(t => t.Status == CoroutineThreadStatus.Finished))
-                    yield break;
-
-                yield return null;
-            }
-        }
-
-        /// <summary>
-        /// Ticks all coroutine threads until they have finished. A Stopwatch will be used to measure elapsed time.
-        /// </summary>
-        public void Finish()
-        {
-            Finish(1.0);
-        }
-
-        /// <summary>
-        /// Ticks all coroutine threads until they have finished. A Stopwatch will be used to measure elapsed time.
-        /// The measured elapsed time will be multiplied by the specified factor.
-        /// </summary>
-        /// <param name="factor">A factor to multiply the measured elapsed time by.</param>
-        public void Finish(double factor)
-        {
-            if (factor <= 0)
-                throw new ArgumentOutOfRangeException(nameof(factor), "timeFactor must be greater than zero");
-
-            Stopwatch sw = Stopwatch.StartNew();
-
-            TimeSpan previousTime = TimeSpan.Zero;
-            int living;
-            do
-            {
-                TimeSpan elapsed;
-                checked
-                {
-                    TimeSpan newTime = TimeSpan.FromTicks((long) (sw.ElapsedTicks * factor));
-
-                    elapsed = newTime - previousTime;
-
-                    previousTime = newTime;
-                }
-                
-                living = Tick(elapsed);
-            } while (living != 0);
+            return ParallelImpl(cors.Select(Start).ToArray());
         }
 
         public virtual void Dispose()
@@ -199,6 +141,36 @@ namespace Coroutines.Framework
         {
             foreach (CoroutineThread thread in _threads)
                 thread.Executor = this;
+        }
+
+        private IEnumerable DelayImpl(TimeSpan endTime)
+        {
+            while (_time < endTime)
+                yield return null;
+        }
+
+        private static IEnumerable ParallelImpl(CoroutineThread[] threads)
+        {
+            while (true)
+            {
+                {
+                    bool allFinished = true;
+
+                    // ReSharper disable once ForCanBeConvertedToForeach
+                    for (int i = 0; i < threads.Length; i++)
+                    {
+                        if (threads[i].Status == CoroutineThreadStatus.Faulted)
+                            yield break;
+                        if (threads[i].Status != CoroutineThreadStatus.Finished)
+                            allFinished = false;
+                    }
+
+                    if (allFinished)
+                        yield break;
+                }
+
+                yield return null;
+            }
         }
 
         [OnSerializing]
