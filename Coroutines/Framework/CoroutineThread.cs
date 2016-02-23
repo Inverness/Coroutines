@@ -12,13 +12,17 @@ namespace Coroutines.Framework
     [DataContract(IsReference = true)]
     public sealed class CoroutineThread : IDisposable
     {
-        [DataMember(Name = "Stack")]
-        private readonly Stack<IEnumerator> _stack;
-
         [ThreadStatic]
         private static Stack<CoroutineThread> t_currentThreads;
 
-        private TimeSpan _elapsed;
+        [DataMember(Name = "Stack")]
+        private readonly Stack<IEnumerator> _stack;
+
+        [DataMember(Name = "ElapsedTime")]
+        private TimeSpan _elapsedTime;
+
+        private object _result;
+        private bool _hasResult;
 
         internal CoroutineThread(CoroutineExecutor executor, IEnumerable enumerable)
         {
@@ -55,15 +59,10 @@ namespace Coroutines.Framework
         public Exception Exception { get; private set; }
 
         /// <summary>
-        /// Gets the current coroutine result if any.
-        /// </summary>
-        public object Result { get; internal set; }
-
-        /// <summary>
         /// Gets the amount of time that has elapsed since the previous execution. This is only valid while a
         /// coroutine is being executed.
         /// </summary>
-        public TimeSpan ElapsedTime => _elapsed;
+        public TimeSpan ElapsedTime => _elapsedTime;
 
         /// <summary>
         /// Gets the currently executing thread if any.
@@ -84,18 +83,20 @@ namespace Coroutines.Framework
         /// <returns></returns>
         public T GetResult<T>()
         {
-            return (T) Result;
+            if (!_hasResult)
+                throw new InvalidOperationException("no result has been set");
+            return (T) _result;
         }
 
         /// <summary>
-        /// Gets the current thread result cast to the specified type, or default(T) if Result is null.
+        /// Gets the current thread result cast to the specified type, or default(T) if Result is null or not specified.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         public T GetResultOrDefault<T>()
         {
-            if (Result != null)
-                return (T) Result;
+            if (_result != null)
+                return (T) _result;
             return default(T);
         }
 
@@ -105,6 +106,18 @@ namespace Coroutines.Framework
         public void Dispose()
         {
             Dispose(null);
+        }
+
+        internal void SetResult(object result)
+        {
+            _result = result;
+            _hasResult = true;
+        }
+
+        internal void ClearResult()
+        {
+            _result = null;
+            _hasResult = false;
         }
 
         internal void Dispose(Exception ex)
@@ -133,7 +146,7 @@ namespace Coroutines.Framework
 
             currentThreads.Push(this);
 
-            _elapsed = elapsed;
+            _elapsedTime = elapsed;
             
             try
             {
@@ -146,14 +159,18 @@ namespace Coroutines.Framework
 
                     Status = CoroutineThreadStatus.Executing;
 
-                    bool hasResult = top.MoveNext();
+                    bool notFinished = top.MoveNext();
 
                     Status = CoroutineThreadStatus.Yielded;
+
+                    // Clear the previous result if any. Results are only made available to the coroutine executing
+                    // immediately after a ResultAction is processed.
+                    ClearResult();
 
                     Debug.Assert(stack.Count != 0 && stack.Peek() == top);
 
                     bool shouldPop = false;
-                    if (hasResult)
+                    if (notFinished)
                     {
                         object result = top.Current;
                         if (result != null)
@@ -220,9 +237,7 @@ namespace Coroutines.Framework
             }
             finally
             {
-                // Since actions are executed immediately, a coroutine lower on the stack will have no trouble receiving
-                // the result of a coroutine it invoked. Otherwise, results are cleared after yielding.
-                Result = null;
+                ClearResult();
 
                 currentThreads.Pop();
             }

@@ -13,7 +13,7 @@ namespace Coroutines.Framework
 
         public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            thread.Result = Value;
+            thread.SetResult(Value);
             Value = null;
             return CoroutineActionBehavior.Pop;
         }
