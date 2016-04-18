@@ -42,6 +42,11 @@ namespace Coroutines.Framework
         public int FrameCount => _stack.Count;
 
         /// <summary>
+        /// Gets or sets a user tag.
+        /// </summary>
+        public object Tag { get; set; }
+
+        /// <summary>
         /// Gets the executor that created this thread.
         /// </summary>
         public CoroutineExecutor Executor { get; internal set; }
