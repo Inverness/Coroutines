@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Manages execution for threads of coroutines. Threads in this context are logical, software threads rather than

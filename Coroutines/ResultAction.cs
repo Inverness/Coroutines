@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     public class ResultAction : CoroutineAction
     {

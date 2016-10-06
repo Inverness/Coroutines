@@ -1,6 +1,6 @@
 using System.Collections;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Describes an action that can occurr after a coroutine yields.

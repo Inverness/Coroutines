@@ -1,4 +1,4 @@
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Describes the behavior of a CoroutineAction when it is processed.

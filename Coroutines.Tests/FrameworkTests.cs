@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Coroutines.Framework;
 using Xunit;
 using Xunit.Abstractions;
 

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
-using Coroutines.Framework;
 using Coroutines.Serialization.Json;
 using Newtonsoft.Json;
 using Xunit;
 using Xunit.Abstractions;
-using static Coroutines.Framework.StandardActions;
+using static Coroutines.StandardActions;
 
 namespace Coroutines.Tests
 {

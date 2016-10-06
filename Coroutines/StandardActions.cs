@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Contains helper methods to create the standard actions. It's recommend to statically import this class when

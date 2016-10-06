@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// An action that delays execution of the current thread for an amount of time.

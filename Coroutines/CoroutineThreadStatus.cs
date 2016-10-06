@@ -1,4 +1,4 @@
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Describes the status of a coroutine thread.

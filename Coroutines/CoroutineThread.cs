@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.Serialization;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// Describes a thread of execution for a coroutine.

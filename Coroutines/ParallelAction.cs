@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace Coroutines.Framework
+namespace Coroutines
 {
     /// <summary>
     /// An action that executes coroutines in parallel.
