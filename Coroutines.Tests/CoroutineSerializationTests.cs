@@ -9,7 +9,7 @@ using Coroutines.Serialization;
 using Newtonsoft.Json;
 using Xunit;
 using Xunit.Abstractions;
-using static Coroutines.Framework.CoroutineAction;
+using static Coroutines.Framework.StandardActions;
 
 namespace Coroutines.Tests
 {

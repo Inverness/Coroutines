@@ -8,19 +8,20 @@ namespace Coroutines.Framework
     /// </summary>
     public class ParallelAction : CoroutineAction
     {
+        private IEnumerable[] _enumerables;
+
         public ParallelAction(params IEnumerable[] enumerables)
         {
             if (enumerables == null)
                 throw new ArgumentNullException(nameof(enumerables));
-            Enumerables = enumerables;
+            _enumerables = enumerables;
         }
-
-        public IEnumerable[] Enumerables { get; private set; }
-
+        
+        // ReSharper disable once RedundantAssignment
         public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            cor = thread.Executor.Parallel(Enumerables);
-            Enumerables = null;
+            cor = thread.Executor.Parallel(_enumerables);
+            _enumerables = null;
             return CoroutineActionBehavior.Push;
         }
     }

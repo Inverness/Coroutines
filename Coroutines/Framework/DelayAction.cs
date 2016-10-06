@@ -8,18 +8,20 @@ namespace Coroutines.Framework
     /// </summary>
     public class DelayAction : CoroutineAction
     {
+        private TimeSpan _time;
+
         public DelayAction(TimeSpan time)
         {
             if (time.Ticks < 0)
                 throw new ArgumentOutOfRangeException(nameof(time));
-            Time = time;
+            _time = time;
         }
 
-        public TimeSpan Time { get; }
-
+        // ReSharper disable once RedundantAssignment
         public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            cor = thread.Executor.Delay(Time);
+            cor = thread.Executor.Delay(_time);
+            _time = default(TimeSpan);
             return CoroutineActionBehavior.Push;
         }
     }

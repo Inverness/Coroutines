@@ -4,17 +4,17 @@ namespace Coroutines.Framework
 {
     public class ResultAction : CoroutineAction
     {
+        private object _value;
+
         public ResultAction(object result)
         {
-            Value = result;
+            _value = result;
         }
-
-        public object Value { get; private set; }
 
         public override CoroutineActionBehavior Process(CoroutineThread thread, ref IEnumerable cor)
         {
-            thread.SetResult(Value);
-            Value = null;
+            thread.SetResult(_value);
+            _value = null;
             return CoroutineActionBehavior.Pop;
         }
     }
