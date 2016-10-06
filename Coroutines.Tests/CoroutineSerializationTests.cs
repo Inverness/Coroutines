@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -113,7 +114,7 @@ namespace Coroutines.Tests
 
     public class CoroutineConverter : JsonConverter
     {
-        private static readonly TypeInfo s_coroutineTypeInfo = typeof (IEnumerator<CoroutineAction>).GetTypeInfo();
+        private static readonly TypeInfo s_coroutineTypeInfo = typeof (IEnumerator).GetTypeInfo();
         private readonly IteratorStateConverter _isc = new IteratorStateConverter();
 
         private readonly bool _withThis;
@@ -132,7 +133,7 @@ namespace Coroutines.Tests
 
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            IteratorState state = _isc.ToState((IEnumerator<CoroutineAction>) value);
+            IteratorState state = _isc.ToState((IEnumerator) value);
 
             Exclude(state);
 
@@ -145,7 +146,7 @@ namespace Coroutines.Tests
 
             Exclude(state);
 
-            var result = (IEnumerator<CoroutineAction>) _isc.FromState(state);
+            IEnumerator result = _isc.FromState(state);
 
             return result;
         }
