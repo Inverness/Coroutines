@@ -13,7 +13,7 @@ namespace Coroutines
     public sealed class CoroutineThread : IDisposable
     {
         [ThreadStatic]
-        private static Stack<CoroutineThread> t_currentThreads;
+        private static CoroutineThread t_currentThread;
 
         [DataMember(Name = "Stack")]
         private readonly Stack<IEnumerator> _stack;
@@ -72,14 +72,7 @@ namespace Coroutines
         /// <summary>
         /// Gets the currently executing thread if any.
         /// </summary>
-        public static CoroutineThread Current
-        {
-            get
-            {
-                Stack<CoroutineThread> stack = t_currentThreads;
-                return stack != null && stack.Count != 0 ? stack.Peek() : null;
-            }
-        }
+        public static CoroutineThread Current => t_currentThread;
 
         /// <summary>
         /// Gets the current thread result cast to the specified type.
@@ -132,10 +125,14 @@ namespace Coroutines
             
             Exception = ex;
             Status = ex != null ? CoroutineThreadStatus.Faulted : CoroutineThreadStatus.Finished;
+
             try
             {
                 while (_stack.Count != 0)
-                    (_stack.Pop() as IDisposable)?.Dispose();
+                {
+                    IEnumerator top = _stack.Pop();
+                    (top as IDisposable)?.Dispose();
+                }
             }
             finally
             {
@@ -145,93 +142,40 @@ namespace Coroutines
 
         internal void Tick(TimeSpan elapsed)
         {
-            Stack<CoroutineThread> currentThreads = t_currentThreads;
-            if (currentThreads == null)
-                t_currentThreads = currentThreads = new Stack<CoroutineThread>();
-
-            currentThreads.Push(this);
+            CoroutineThread oldCurrent = t_currentThread;
+            t_currentThread = this;
 
             _elapsedTime = elapsed;
             
             try
             {
-                Stack<IEnumerator> stack = _stack;
-
-                bool shouldYield = false;
-                while (!shouldYield)
+                bool endLoop = false;
+                while (!endLoop)
                 {
-                    IEnumerator top = stack.Peek();
+                    IEnumerable next = null;
+                    FrameResult frameResult = RunFrame(_stack.Peek(), ref next);
 
-                    Status = CoroutineThreadStatus.Executing;
-
-                    bool notFinished = top.MoveNext();
-
-                    Status = CoroutineThreadStatus.Yielded;
-
-                    // Clear the previous result if any. Results are only made available to the coroutine executing
-                    // immediately after a ResultAction is processed.
-                    ClearResult();
-
-                    Debug.Assert(stack.Count != 0 && stack.Peek() == top);
-
-                    bool shouldPop = false;
-                    if (notFinished)
+                    switch (frameResult)
                     {
-                        object result = top.Current;
-                        if (result != null)
-                        {
-                            IEnumerable enumerable;
-                            CoroutineAction action;
+                        case FrameResult.Yield:
+                            endLoop = true;
+                            break;
+                        case FrameResult.Pop:
+                            IEnumerator oldTop = _stack.Pop();
 
-                            if ((enumerable = result as IEnumerable) != null)
-                            {
-                                stack.Push(enumerable.GetEnumerator());
-                            }
-                            else if ((action = result as CoroutineAction) != null)
-                            {
-                                IEnumerable next = null;
-                                switch (action.Process(this, ref next))
-                                {
-                                    case CoroutineActionBehavior.Yield:
-                                        shouldYield = true;
-                                        break;
-                                    case CoroutineActionBehavior.Push:
-                                        if (next == null)
-                                            throw new InvalidOperationException("no new frame specified");
-                                        stack.Push(next.GetEnumerator());
-                                        break;
-                                    case CoroutineActionBehavior.Pop:
-                                        shouldPop = true;
-                                        break;
-                                    default:
-                                        throw new NotImplementedException();
-                                }
-                            }
-                            else
-                            {
-                                shouldYield = true;
-                            }
-                        }
-                        else
-                        {
-                            shouldYield = true;
-                        }
-                    }
-                    else
-                    {
-                        shouldPop = true;
-                    }
+                            (oldTop as IDisposable)?.Dispose();
 
-                    if (shouldPop)
-                    {
-                        stack.Pop();
-                        (top as IDisposable)?.Dispose();
-
-                        if (stack.Count == 0)
-                        {
-                            Dispose();
-                            shouldYield = true;
-                        }
+                            if (_stack.Count == 0)
+                            {
+                                Dispose();
+                                endLoop = true;
+                            }
+                            break;
+                        case FrameResult.Push:
+                            _stack.Push(next.GetEnumerator());
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
                     }
                 }
             }
@@ -242,10 +186,77 @@ namespace Coroutines
             }
             finally
             {
-                ClearResult();
-
-                currentThreads.Pop();
+                Debug.Assert(!_hasResult);
+                t_currentThread = oldCurrent;
             }
+        }
+
+        private FrameResult RunFrame(IEnumerator frame, ref IEnumerable next)
+        {
+            Status = CoroutineThreadStatus.Executing;
+
+            bool hasNext;
+            try
+            {
+                hasNext = frame.MoveNext();
+            }
+            finally
+            {
+                Status = CoroutineThreadStatus.Yielded;
+
+                // Clear the previous result if any. Results are only made available to the coroutine executing
+                // immediately after a ResultAction is processed.
+                ClearResult();
+            }
+
+            if (!hasNext)
+                return FrameResult.Pop;
+
+            // Yielding null yields the coroutine
+            object result = frame.Current;
+            if (result == null)
+                return FrameResult.Yield;
+
+            IEnumerable enumerable;
+            CoroutineAction action;
+
+            // An IEnumerable can be yielded directly to run it next, rather than requiring an action.
+            if ((enumerable = result as IEnumerable) != null)
+            {
+                next = enumerable;
+                return FrameResult.Push;
+            }
+
+            // An action will decide what to do next with the thread.
+            if ((action = result as CoroutineAction) != null)
+            {
+                IEnumerable actionNext = null;
+                CoroutineActionBehavior actionResult = action.Process(this, ref actionNext);
+
+                switch (actionResult)
+                {
+                    case CoroutineActionBehavior.Yield:
+                        return FrameResult.Yield;
+                    case CoroutineActionBehavior.Push:
+                        if (actionNext == null)
+                            throw new InvalidOperationException("no new frame specified");
+                        next = actionNext;
+                        return FrameResult.Push;
+                    case CoroutineActionBehavior.Pop:
+                        return FrameResult.Pop;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+
+            throw new InvalidOperationException("Unknown coroutine yielded type: " + result.GetType());
+        }
+
+        private enum FrameResult
+        {
+            Yield,
+            Pop,
+            Push
         }
     }
 }
