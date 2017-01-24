@@ -34,6 +34,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Coroutine.cs" />
     <Compile Include="CoroutineAction.cs" />
     <Compile Include="CoroutineActionBehavior.cs" />
     <Compile Include="CoroutineExecutor.cs" />
