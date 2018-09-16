@@ -12,10 +12,7 @@ namespace Coroutines.Serialization
         /// <returns>The original name, or the name argument if it was not compiler-generated.</returns>
         public static string ParseOriginalName(string name)
         {
-            char typeChar;
-            string suffix;
-            string original;
-            return TryParseGeneratedName(name, out typeChar, out suffix, out original) ? original : name;
+            return TryParseGeneratedName(name, out char _, out string _, out string original) ? original : name;
         }
 
         /// <summary>
@@ -32,7 +29,7 @@ namespace Coroutines.Serialization
             out string suffix,
             out string original)
         {
-            typeChar = default(char);
+            typeChar = default;
             suffix = null;
             original = null;
 

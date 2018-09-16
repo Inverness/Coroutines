@@ -85,18 +85,14 @@ namespace Coroutines.Serialization
 
             foreach (KeyValuePair<string, object> a in state.Arguments)
             {
-                FieldInfo info;
-                if (!ti.Arguments.TryGetValue(a.Key, out info))
-                    continue;
-                info.SetValue(iterator, a.Value);
+                if (ti.Arguments.TryGetValue(a.Key, out FieldInfo info))
+                    info.SetValue(iterator, a.Value);
             }
 
             foreach (KeyValuePair<string, object> v in state.Variables)
             {
-                FieldInfo info;
-                if (!ti.Variables.TryGetValue(v.Key, out info))
-                    continue;
-                info.SetValue(iterator, v.Value);
+                if (ti.Variables.TryGetValue(v.Key, out FieldInfo info))
+                    info.SetValue(iterator, v.Value);
             }
 
             return iterator;
@@ -104,8 +100,7 @@ namespace Coroutines.Serialization
 
         private IteratorTypeInfo GetIteratorTypeInfo(Type type)
         {
-            IteratorTypeInfo fi;
-            if (_fieldInfoCache.TryGetValue(type, out fi))
+            if (_fieldInfoCache.TryGetValue(type, out IteratorTypeInfo fi))
                 return fi;
 
             fi = CreateIteratorTypeInfo(type);
@@ -122,8 +117,7 @@ namespace Coroutines.Serialization
 
             Tuple<string, string> key = Tuple.Create(declaringType.AssemblyQualifiedName, methodName);
 
-            Type iteratorType;
-            if (_iteratorTypes.TryGetValue(key, out iteratorType))
+            if (_iteratorTypes.TryGetValue(key, out Type iteratorType))
                 return iteratorType;
 
             TypeInfo declaringTypeInfo = declaringType.GetTypeInfo();
@@ -134,10 +128,7 @@ namespace Coroutines.Serialization
 
             foreach (TypeInfo nt in declaringTypeInfo.DeclaredNestedTypes)
             {
-                char typeChar;
-                string suffix;
-                string original;
-                if (NameUtility.TryParseGeneratedName(nt.Name, out typeChar, out suffix, out original) && typeChar == StateMachineTypeChar && original == methodName)
+                if (NameUtility.TryParseGeneratedName(nt.Name, out char typeChar, out string _, out string original) && typeChar == StateMachineTypeChar && original == methodName)
                 {
                     iteratorType = nt.AsType();
                     break;
@@ -165,10 +156,7 @@ namespace Coroutines.Serialization
 
             foreach (FieldInfo field in typeInfo.DeclaredFields)
             {
-                char typeChar;
-                string suffix;
-                string original;
-                if (NameUtility.TryParseGeneratedName(field.Name, out typeChar, out suffix, out original))
+                if (NameUtility.TryParseGeneratedName(field.Name, out char typeChar, out string suffix, out string original))
                 {
                     if (typeChar == StateTypeChar)
                     {

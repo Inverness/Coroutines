@@ -12,9 +12,7 @@ namespace Coroutines
 
         public ParallelAction(params IEnumerable[] enumerables)
         {
-            if (enumerables == null)
-                throw new ArgumentNullException(nameof(enumerables));
-            _enumerables = enumerables;
+            _enumerables = enumerables ?? throw new ArgumentNullException(nameof(enumerables));
         }
         
         // ReSharper disable once RedundantAssignment

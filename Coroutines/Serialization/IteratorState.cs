@@ -9,12 +9,6 @@ namespace Coroutines.Serialization
     [DataContract]
     public sealed class IteratorState
     {
-        public IteratorState()
-        {
-            Arguments = new Dictionary<string, object>();
-            Variables = new Dictionary<string, object>();
-        }
-
         /// <summary>
         /// Gets or sets the name of the type that declared the iterator.
         /// </summary>
@@ -49,12 +43,12 @@ namespace Coroutines.Serialization
         /// Gets a dictionary containing argument values.
         /// </summary>
         [DataMember]
-        public Dictionary<string, object> Arguments { get; }
+        public Dictionary<string, object> Arguments { get; } = new Dictionary<string, object>();
 
         /// <summary>
         /// Gets or sets a dictionary containing variable values.
         /// </summary>
         [DataMember]
-        public Dictionary<string, object> Variables { get; }
+        public Dictionary<string, object> Variables { get; } = new Dictionary<string, object>();
     }
 }
