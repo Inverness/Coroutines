@@ -214,42 +214,37 @@ namespace Coroutines
 
             // Yielding null yields the coroutine
             object result = frame.Current;
-            if (result == null)
-                return FrameResult.Yield;
 
-            IEnumerable enumerable;
-            CoroutineAction action;
-
-            // An IEnumerable can be yielded directly to run it next, rather than requiring an action.
-            if ((enumerable = result as IEnumerable) != null)
+            switch (result)
             {
-                next = enumerable;
-                return FrameResult.Push;
-            }
-
-            // An action will decide what to do next with the thread.
-            if ((action = result as CoroutineAction) != null)
-            {
-                IEnumerable actionNext = null;
-                CoroutineActionBehavior actionResult = action.Process(this, ref actionNext);
-
-                switch (actionResult)
+                case null:
+                    return FrameResult.Yield;
+                // An IEnumerable can be yielded directly to run it next, rather than requiring an action.
+                case IEnumerable enumerable:
+                    next = enumerable;
+                    return FrameResult.Push;
+                // An action will decide what to do next with the thread.
+                case CoroutineAction action:
                 {
-                    case CoroutineActionBehavior.Yield:
-                        return FrameResult.Yield;
-                    case CoroutineActionBehavior.Push:
-                        if (actionNext == null)
-                            throw new InvalidOperationException("no new frame specified");
-                        next = actionNext;
-                        return FrameResult.Push;
-                    case CoroutineActionBehavior.Pop:
-                        return FrameResult.Pop;
-                    default:
-                        throw new NotImplementedException();
-                }
-            }
+                    IEnumerable actionNext = null;
+                    CoroutineActionBehavior actionResult = action.Process(this, ref actionNext);
 
-            throw new InvalidOperationException("Unknown coroutine yielded type: " + result.GetType());
+                    switch (actionResult)
+                    {
+                        case CoroutineActionBehavior.Yield:
+                            return FrameResult.Yield;
+                        case CoroutineActionBehavior.Push:
+                            next = actionNext ?? throw new InvalidOperationException("no new frame specified");
+                            return FrameResult.Push;
+                        case CoroutineActionBehavior.Pop:
+                            return FrameResult.Pop;
+                        default:
+                            throw new NotImplementedException();
+                    }
+                }
+                default:
+                    throw new InvalidOperationException("Unknown coroutine yielded type: " + result.GetType());
+            }
         }
 
         private enum FrameResult

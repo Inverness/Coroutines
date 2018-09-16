@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using System.Runtime.Serialization.Formatters;
 using Newtonsoft.Json;
 
 namespace Coroutines.Serialization.Json
