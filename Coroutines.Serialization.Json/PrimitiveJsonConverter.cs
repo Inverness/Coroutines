@@ -27,9 +27,9 @@ namespace Coroutines.Serialization.Json
                     writer.WriteStartObject();
                     writer.WritePropertyName("$type", false);
 
-                    switch (serializer.TypeNameAssemblyFormat)
+                    switch (serializer.TypeNameAssemblyFormatHandling)
                     {
-                        case FormatterAssemblyStyle.Full:
+                        case TypeNameAssemblyFormatHandling.Full:
                             writer.WriteValue(value.GetType().AssemblyQualifiedName);
                             break;
                         default:
